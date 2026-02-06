@@ -172,9 +172,11 @@ def getTables(configtable, tables=list, conn=str, write=False, path=str, db=str,
         print(f"Converting pandas dataframe {dbtable}")
 
         if not Pdf.empty:
-            if dbtable == "users":
-                df = spark.createDataFrame(Pdf, schema=SchemaUser)
-            elif "verified" in Pdf.columns:
+           if dbtable == "users":
+             if "verified" in Pdf.columns:
+                Pdf["verified"] = Pdf["verified"].astype(str)
+                 df = spark.createDataFrame(Pdf, schema=SchemaUser)
+             elif "verified" in Pdf.columns:
                 df = spark.createDataFrame(Pdf.drop("verified"))
             else:
                 df = spark.createDataFrame(clean_pandas_dataframe(Pdf))
