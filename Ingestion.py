@@ -49,7 +49,7 @@ SchemaUser = StructType([
     StructField("address", StringType(), True),
     StructField("street", StringType(), True),
     StructField("user_code", StringType(), True),
-    StructField("verified", StringType(), True),
+    StructField("verified", IntegerType(), True), 
     StructField("status", IntegerType(), True),
     StructField("last_login", TimestampType(), True),
     StructField("login_attempt", StringType(), True),
@@ -169,16 +169,23 @@ def getTables(configtable, tables=list, conn=str, write=False, path=str, db=str,
         query = f"SELECT * FROM {db}.{dbtable} WHERE created_at >= '{date}' AND YEAR(created_at) <= {CY}"
         Pdf = pd.read_sql_query(query, conn)
 
+        if "verified" in Pdf.columns:
+            Pdf["verified"] = Pdf["verified"].astype("Int64")  #  THIS IS THE FIX
+        
+        if "dob" in Pdf.columns:
+        # Convert to string and handle nulls
+            Pdf["dob"] = Pdf["dob"].astype(str).replace('nan', None)
+
+
+
         print(f"Converting pandas dataframe {dbtable}")
 
         if not Pdf.empty:
-           if dbtable == "users":
-             if "verified" in Pdf.columns:
-                Pdf["verified"] = Pdf["verified"].astype(str)
-                 df = spark.createDataFrame(Pdf, schema=SchemaUser)
-             elif "verified" in Pdf.columns:
-                df = spark.createDataFrame(Pdf.drop("verified"))
+            if dbtable == "users":
+                # Use your schema (SchemaUser) for users table
+                df = spark.createDataFrame(Pdf, schema=SchemaUser)
             else:
+                # For other tables, clean dataframe safely
                 df = spark.createDataFrame(clean_pandas_dataframe(Pdf))
 
             if str(dbtable).endswith("s"):
