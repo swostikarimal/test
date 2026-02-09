@@ -12,7 +12,7 @@ metric = [
     "bounceRate", "engagementRate","averageSessionDuration"
 ]
 
-`pathaudiance = "/mnt/ga/reporting/toppages/pagePathAndUnifiedScreenClassAndAudience"
+pathaudiance = "/mnt/ga/reporting/toppages/pagePathAndUnifiedScreenClassAndAudience"
 pathmedium = "/mnt/ga/reporting/toppages/PathAndUnifiedScreenSessionMedium"
 pathsource = "/mnt/ga/reporting/toppages/PathAndUnifiedScreenSessionSource"
 pathpage = "/mnt/ga/reporting/toppages/pagePathAndScreenClass"
