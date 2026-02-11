@@ -1,5 +1,7 @@
 # Databricks notebook source
 
+# Databricks notebook source
+
 """
 FASTER OPTIMIZATION - Simpler approach
 Key changes:
@@ -329,8 +331,13 @@ def main(chunk_size=50000):
     
     conn = MysqlConnect(HostDB, UserDB, db, PasswordDB)
     configtable = spark.table("analyticadebuddha.default.updates").filter((F.col("Active") == True))
-    tables = ['users']
+    tables = getTableList(df=configtable)
     
+    # Exclude flight_searched table
+    excluded_tables = ["tbl_flight_searches"]
+    tables = [table for table in tables if table not in excluded_tables]
+    
+    print(f"⚠️  Excluded tables: {', '.join(excluded_tables)}")
     print(f"\n🚀 Starting data pipeline with chunk_size={chunk_size:,}")
     print(f"📋 Tables to process: {len(tables)}")
     print(f"{'='*60}\n")
@@ -352,4 +359,4 @@ def main(chunk_size=50000):
     print(f"\n✅ Pipeline completed!")
 
 if __name__ == "__main__":
-    main(chunk_size=50000)
+    main(chunk_size=75000)
