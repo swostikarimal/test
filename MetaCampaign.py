@@ -115,7 +115,7 @@ def customEventName(url_custom, access_token):
 def main():
     '''
     '''
-    api_version = "v21.0"
+    api_version = "v23.0"
     app_id = '1311670110282149'
     app_secret = '4d00d38b2f2abd468cb952725c6ad914'
 
