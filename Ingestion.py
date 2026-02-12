@@ -3,12 +3,12 @@
 # Databricks notebook source
 
 """
-FASTER OPTIMIZATION - Simpler approach
+OPTIMIZED VERSION - Load all data at once
 Key changes:
-1. Larger chunks (50K rows with 16GB RAM)
-2. Load old data ONCE, not per chunk
-3. Compare at the END, not per chunk
-4. Much faster!
+1. Removed chunking - loads all data in single query
+2. Load old data ONCE
+3. Compare at the END
+4. Faster for smaller datasets
 """
 
 import pymysql
@@ -115,15 +115,12 @@ def getTableList(df):
     tables = list(df["DbTable"])
     return tables
 
-def getTables_SimplerOptimization(configtable, tables=list, conn=str, write=False, path=str, db=str, schema=None, chunk_size=50000):
+def getTables_NoChunking(configtable, tables=list, conn=str, write=False, path=str, db=str, schema=None):
     """
-    SIMPLER, FASTER APPROACH:
-    1. Load all new MySQL data in chunks (to avoid memory crash)
-    2. Combine all chunks into temp table
-    3. Compare ONCE with old data
-    4. Write result
-    
-    Much faster than comparing each chunk separately!
+    SIMPLIFIED APPROACH - No chunking, load all data at once
+    1. Load all new MySQL data in single query
+    2. Compare ONCE with old data
+    3. Write result
     """
     dictframe = []
     
@@ -148,75 +145,31 @@ def getTables_SimplerOptimization(configtable, tables=list, conn=str, write=Fals
             table_name = str(table)
             fullPath = path + "/" + table_name
             
-            # Get total count first
-            count_query = f"SELECT COUNT(*) as cnt FROM {db}.{dbtable} WHERE created_at >= '{date}' AND YEAR(created_at) <= {CY}"
-            total_count = pd.read_sql_query(count_query, conn)['cnt'].iloc[0]
-            print(f"📊 Total rows to process: {total_count:,}")
+            # Load all data at once (no chunking)
+            query = f"SELECT * FROM {db}.{dbtable} WHERE created_at >= '{date}' AND YEAR(created_at) <= {CY}"
             
-            if total_count == 0:
+            print(f"⏳ Loading data from MySQL...")
+            Pdf = pd.read_sql_query(query, conn)
+            
+            if Pdf.empty:
                 print(f"⏭️  No new data for {dbtable}")
                 continue
             
-            # Get min/max ID for chunking
-            id_query = f"SELECT MIN(id) as min_id, MAX(id) as max_id FROM {db}.{dbtable} WHERE created_at >= '{date}' AND YEAR(created_at) <= {CY}"
-            id_range = pd.read_sql_query(id_query, conn)
-            min_id = int(id_range['min_id'].iloc[0])
-            max_id = int(id_range['max_id'].iloc[0])
+            print(f"✅ Loaded {len(Pdf):,} rows from MySQL")
             
-            print(f"🔢 ID range: {min_id:,} to {max_id:,}")
-            print(f"📦 Chunk size: {chunk_size:,} rows")
+            # Clean pandas data
+            if "verified" in Pdf.columns:
+                Pdf["verified"] = Pdf["verified"].astype("Int64")
+            if "dob" in Pdf.columns:
+                Pdf["dob"] = Pdf["dob"].astype(str).replace('nan', None)
             
-            # Load MySQL data in chunks and accumulate
-            all_chunks = []
-            chunk_num = 0
+            # Convert to Spark
+            if dbtable == "users" and schema is not None:
+                combined_df = spark.createDataFrame(Pdf, schema=schema)
+            else:
+                combined_df = spark.createDataFrame(clean_pandas_dataframe(Pdf))
             
-            for start_id in range(min_id, max_id + 1, chunk_size):
-                end_id = min(start_id + chunk_size - 1, max_id)
-                chunk_num += 1
-                
-                query = f"""
-                SELECT * FROM {db}.{dbtable} 
-                WHERE created_at >= '{date}' 
-                AND YEAR(created_at) <= {CY}
-                AND id BETWEEN {start_id} AND {end_id}
-                """
-                
-                print(f"  ⏳ Loading chunk {chunk_num}: IDs {start_id:,} to {end_id:,}...", end='')
-                
-                chunk_pdf = pd.read_sql_query(query, conn)
-                
-                if chunk_pdf.empty:
-                    print(" (empty, skipped)")
-                    continue
-                
-                print(f" ({len(chunk_pdf):,} rows)")
-                
-                # Clean pandas data
-                if "verified" in chunk_pdf.columns:
-                    chunk_pdf["verified"] = chunk_pdf["verified"].astype("Int64")
-                if "dob" in chunk_pdf.columns:
-                    chunk_pdf["dob"] = chunk_pdf["dob"].astype(str).replace('nan', None)
-                
-                # Convert to Spark
-                if dbtable == "users" and schema is not None:
-                    chunk_df = spark.createDataFrame(chunk_pdf, schema=schema)
-                else:
-                    chunk_df = spark.createDataFrame(clean_pandas_dataframe(chunk_pdf))
-                
-                all_chunks.append(chunk_df)
-            
-            if not all_chunks:
-                print(f"⏭️  No data loaded for {dbtable}")
-                continue
-            
-            print(f"✅ Loaded {len(all_chunks)} chunks from MySQL")
-            print(f"🔄 Combining chunks...")
-            
-            # Combine all chunks
-            from functools import reduce
-            combined_df = reduce(lambda df1, df2: df1.union(df2), all_chunks)
-            
-            print(f"✅ Combined into single DataFrame: {combined_df.count():,} rows")
+            print(f"✅ Converted to Spark DataFrame: {combined_df.count():,} rows")
             
             # Rename columns
             for col in combined_df.columns:
@@ -229,7 +182,7 @@ def getTables_SimplerOptimization(configtable, tables=list, conn=str, write=Fals
             if write:
                 print(f"🔍 Comparing with existing data...")
                 
-                # Now do the comparison ONCE (not per chunk)
+                # Now do the comparison ONCE
                 CurrentYear = F.year(F.current_date())
                 Filteryear = F.year("created_at").between("2019", CurrentYear)
                 
@@ -319,10 +272,10 @@ def updateConfig(configtable, dictframe):
     else:
         print(f"No new data to be appended to the config table")
 
-def main(chunk_size=50000):
+def main():
     """
-    Main function - SIMPLER FASTER VERSION
-    chunk_size: 50000 is good for 16GB RAM, 4 cores
+    Main function - NO CHUNKING VERSION
+    Loads all data at once
     """
     HostDB = "13.215.173.246"
     UserDB = dbutils.secrets.get(scope="database", key="db_user")
@@ -338,19 +291,18 @@ def main(chunk_size=50000):
     tables = [table for table in tables if table not in excluded_tables]
     
     print(f"⚠️  Excluded tables: {', '.join(excluded_tables)}")
-    print(f"\n🚀 Starting data pipeline with chunk_size={chunk_size:,}")
+    print(f"\n🚀 Starting data pipeline (no chunking)")
     print(f"📋 Tables to process: {len(tables)}")
     print(f"{'='*60}\n")
     
-    dictframe = getTables_SimplerOptimization(
+    dictframe = getTables_NoChunking(
         configtable, 
         tables=tables, 
         conn=conn, 
         write=True, 
         path="/mnt/bronze", 
         db=db, 
-        schema=SchemaUser,
-        chunk_size=chunk_size
+        schema=SchemaUser
     )
     
     updateConfig(configtable, dictframe)
@@ -359,4 +311,4 @@ def main(chunk_size=50000):
     print(f"\n✅ Pipeline completed!")
 
 if __name__ == "__main__":
-    main(chunk_size=75000)
+    main()
