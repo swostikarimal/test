@@ -339,7 +339,7 @@ def main(override_date=None):
     SalesUsd.unpersist()
 
 if __name__== "__main__":
-    main(override_date="2025-12-01")
+    main(override_date="2025-12-31")
     main(override_date="2026-01-31")
     main()
 
